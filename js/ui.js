@@ -202,7 +202,7 @@ function setClassColor(color) {
 /* ===================== CONFIRM DIALOG ===================== */
 function confirmAction(message, onConfirm) {
     const id = Modal.create('Confirm', `<p style="font-size:0.9rem">${message}</p>`,
-        `<button class="btn btn-secondary btn-sm" onclick="Modal.close('${id}')">Cancel</button>
+        `<button class="btn btn-secondary btn-sm" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button>
      <button class="btn btn-danger btn-sm" id="confirmOkBtn">Confirm</button>`
     );
     setTimeout(() => {

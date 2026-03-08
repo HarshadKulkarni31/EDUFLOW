@@ -204,13 +204,13 @@
             };
 
             window.openPostAnnouncement = () => {
-                const id = Modal.create('Post Announcement',
+                Modal.create('Post Announcement',
                     `<div class="flex flex-col gap-16">
         <div class="form-group"><label class="form-label">Announcement *</label><textarea id="ann_text" class="form-control" rows="4" placeholder="Share an update or announcement with the class…"></textarea></div>
         <div class="form-group"><label class="form-label">Attachments (comma-separated filenames)</label><input id="ann_attach" class="form-control" placeholder="e.g., notes.pdf, slides.pptx"></div>
       </div>`,
-                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
-       <button class="btn btn-primary" onclick="doPostAnnouncement('${id}')">Post</button>`
+                    `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button>
+       <button class="btn btn-primary" onclick="doPostAnnouncement(this.closest('.modal-overlay').id)">Post</button>`
                 );
             };
             window.doPostAnnouncement = (modalId) => {
@@ -290,14 +290,15 @@
             };
 
             window.openGradeForm = (subId, totalMarks, title) => {
-                const sub = LMS.Submissions.getByAssignment(LMS.Assignments.getById(LMS.Submissions.getByAssignment('').find ? '' : subId)?.id || '').find(s => s.id === subId) || (() => { const all = JSON.parse(localStorage.getItem('lms_submissions') || '[]'); return all.find(s => s.id === subId); })();
-                const id = Modal.create(`Grade: ${title}`,
+                const all = JSON.parse(localStorage.getItem('lms_submissions') || '[]');
+                const sub = all.find(s => s.id === subId);
+                Modal.create(`Grade: ${title}`,
                     `<div class="flex flex-col gap-16">
-        <div class="form-group"><label class="form-label">Marks (out of ${totalMarks})</label><input id="grade_marks" type="number" min="0" max="${totalMarks}" class="form-control" value="${sub?.grade || ''}" placeholder="Enter marks"></div>
+        <div class="form-group"><label class="form-label">Marks (out of ${totalMarks})</label><input id="grade_marks" type="number" min="0" max="${totalMarks}" class="form-control" value="${sub?.grade ?? ''}" placeholder="Enter marks"></div>
         <div class="form-group"><label class="form-label">Feedback</label><textarea id="grade_feedback" class="form-control" rows="3" placeholder="Provide constructive feedback…">${sub?.feedback || ''}</textarea></div>
       </div>`,
-                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
-       <button class="btn btn-success" onclick="doGrade('${subId}','${totalMarks}','${id}')">Save Grade</button>`
+                    `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button>
+       <button class="btn btn-success" onclick="doGrade('${subId}','${totalMarks}',this.closest('.modal-overlay').id)">Save Grade</button>`
                 );
             };
             window.doGrade = (subId, totalMarks, modalId) => {
@@ -311,7 +312,7 @@
             };
 
             window.openCreateAssignment = () => {
-                const id = Modal.create('Create Assignment',
+                Modal.create('Create Assignment',
                     `<div class="flex flex-col gap-16">
         <div class="form-group"><label class="form-label">Title *</label><input id="a_title" class="form-control" placeholder="Assignment title"></div>
         <div class="form-group"><label class="form-label">Description</label><textarea id="a_desc" class="form-control" placeholder="Describe the assignment…"></textarea></div>
@@ -321,8 +322,8 @@
         </div>
         <div class="form-group"><label class="form-label">Attachments (comma-separated)</label><input id="a_attach" class="form-control" placeholder="e.g., instructions.pdf"></div>
       </div>`,
-                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
-       <button class="btn btn-primary" onclick="doCreateAssignment('${id}')">Create</button>`
+                    `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button>
+       <button class="btn btn-primary" onclick="doCreateAssignment(this.closest('.modal-overlay').id)">Create</button>`
                 );
             };
             window.doCreateAssignment = (modalId) => {
@@ -363,7 +364,7 @@
             window.deleteMat = (id) => confirmAction('Remove material?', () => { LMS.Materials.delete(id); renderMaterials(); Toast.success('Removed'); });
 
             window.openAddMaterial = () => {
-                const id = Modal.create('Add Study Material',
+                Modal.create('Add Study Material',
                     `<div class="flex flex-col gap-16">
         <div class="form-group"><label class="form-label">Title *</label><input id="m_title" class="form-control" placeholder="Material title"></div>
         <div class="flex gap-12">
@@ -373,8 +374,8 @@
           <div class="form-group" style="flex:1"><label class="form-label">URL / Filename</label><input id="m_url" class="form-control" placeholder="https://... or filename.pdf"></div>
         </div>
       </div>`,
-                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
-       <button class="btn btn-primary" onclick="doAddMat('${id}')">Add Material</button>`
+                    `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button>
+       <button class="btn btn-primary" onclick="doAddMat(this.closest('.modal-overlay').id)">Add Material</button>`
                 );
             };
             window.doAddMat = (modalId) => {

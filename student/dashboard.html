@@ -202,14 +202,14 @@
 
             // Join class modal
             window.openJoinClass = () => {
-                const id = Modal.create('Join a Class',
+                Modal.create('Join a Class',
                     `<div class="form-group">
         <label class="form-label">Enter Join Code</label>
         <input id="join_code" class="form-control" placeholder="e.g., CS101A" style="text-transform:uppercase;font-size:1.1rem;letter-spacing:0.08em" oninput="this.value=this.value.toUpperCase()">
         <p style="font-size:0.8rem;color:var(--text-muted);margin-top:6px">Ask your teacher for the class join code.</p>
       </div>`,
-                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
-       <button class="btn btn-primary" onclick="doJoinClass('${id}')">Join Class</button>`
+                    `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button>
+       <button class="btn btn-primary" onclick="doJoinClass(this.closest('.modal-overlay').id)">Join Class</button>`
                 );
             };
             window.doJoinClass = (modalId) => {

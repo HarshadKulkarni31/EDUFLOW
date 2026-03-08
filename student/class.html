@@ -216,7 +216,7 @@
         ${sub.content ? `<div style="font-size:0.85rem;color:var(--text-secondary);margin-top:8px;padding:8px;background:var(--glass);border-radius:6px">"${sub.content}"</div>` : ''}
       </div>` : '';
 
-                const id = Modal.create(a.title,
+                Modal.create(a.title,
                     `<div>
         <div class="flex gap-12 mb-16 flex-wrap">
           <span class="badge badge-primary">${a.totalMarks} marks</span>
@@ -233,8 +233,9 @@
           <div class="form-group"><label class="form-label">File Name (simulated)</label><input id="sub_file" class="form-control" placeholder="e.g., my_assignment.zip" value="${sub?.fileUrl || ''}"></div>
         </div>` : ''}
       </div>`,
-                    (!isOverdue || !sub) ? `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button><button class="btn btn-primary" onclick="doSubmit('${asgnId}','${id}')">📤 ${sub ? 'Resubmit' : 'Submit'}</button>` :
-                        `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Close</button>`
+                    (!isOverdue || !sub)
+                        ? `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button><button class="btn btn-primary" onclick="doSubmit('${asgnId}',this.closest('.modal-overlay').id)">📤 ${sub ? 'Resubmit' : 'Submit'}</button>`
+                        : `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Close</button>`
                 );
             };
 

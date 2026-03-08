@@ -194,7 +194,7 @@
 
             // Create class modal
             window.openCreateClass = () => {
-                const id = Modal.create('Create New Class',
+                Modal.create('Create New Class',
                     `<div class="flex flex-col gap-16">
         <div class="form-group"><label class="form-label">Class Name *</label><input id="mc_name" class="form-control" placeholder="e.g., Introduction to Computer Science" required></div>
         <div class="flex gap-12">
@@ -206,8 +206,8 @@
           <button class="btn btn-secondary btn-sm" onclick="document.getElementById('mc_code').value='CLS'+Math.random().toString(36).substr(2,4).toUpperCase()">Generate</button></div>
         </div>
       </div>`,
-                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
-       <button class="btn btn-primary" onclick="doCreateClass('${id}')">Create Class</button>`
+                    `<button class="btn btn-secondary" onclick="Modal.close(this.closest('.modal-overlay').id)">Cancel</button>
+       <button class="btn btn-primary" onclick="doCreateClass(this.closest('.modal-overlay').id)">Create Class</button>`
                 );
                 setTimeout(() => { document.getElementById('mc_code').value = 'CLS' + Math.random().toString(36).substr(2, 4).toUpperCase(); }, 50);
             };
