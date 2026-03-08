@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gradebook — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item active" href="gradebook.html"><span class="nav-icon">📊</span> Gradebook</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title">Gradebook</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12" id="navbarUser"></div>
+            </div>
+        </header>
+        <main class="main-content">
+            <div class="page-header">
+                <div class="flex items-center justify-between flex-wrap gap-12">
+                    <div>
+                        <h1>📊 Gradebook</h1>
+                        <p>View and manage student grades for each class</p>
+                    </div>
+                    <div class="flex gap-12">
+                        <select class="form-control" id="classSelect" style="width:260px" onchange="loadGradebook()">
+                            <option value="">— Select a class —</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+                    </div>
+                </div>
+            </div>
+            <div id="gradebookContent">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📊</div>
+                    <h3>Select a class to view grades</h3>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('teacher');
+        let currentClsId = null, chartInst = null;
+        if (user) {
+            initNavbar(user); initSidebarUser(user); initSidebar();
+            renderSidebarNotifDrawer(user.id);
+            const classes = LMS.Classes.getByTeacher(user.id);
+            initSidebarClasses(classes, './');
+            const sel = document.getElementById('classSelect');
+            classes.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); });
+
+            // Auto-select from URL
+            const urlCls = new URLSearchParams(window.location.search).get('class');
+            if (urlCls) { sel.value = urlCls; loadGradebook(); }
+
+            function loadGradebook() {
+                currentClsId = sel.value;
+                if (!currentClsId) return;
+                const cls = LMS.Classes.getById(currentClsId);
+                const students = LMS.Classes.getStudents(currentClsId);
+                const assignments = LMS.Assignments.getByClass(currentClsId);
+                if (!students.length || !assignments.length) {
+                    document.getElementById('gradebookContent').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><h3>No data available</h3><p>Add students and assignments to see grades</p></div>';
+                    return;
+                }
+
+                // Build grid data
+                const rows = students.map(st => {
+                    const grades = assignments.map(a => {
+                        const sub = LMS.Submissions.getByStudentAndAssignment(st.id, a.id);
+                        return sub?.grade ?? null;
+                    });
+                    const scored = grades.filter(g => g !== null);
+                    const total = scored.reduce((s, g) => s + g, 0);
+                    const maxTotal = assignments.filter((_, i) => grades[i] !== null).reduce((s, a) => s + a.totalMarks, 0);
+                    const pct = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : null;
+                    return { student: st, grades, total, maxTotal, pct };
+                });
+
+                // Chart
+                const chartWrap = document.createElement('div');
+                chartWrap.className = 'card mb-24';
+                chartWrap.innerHTML = `<div class="card-header"><h3 class="card-title">Grade Distribution</h3></div><canvas id="gradeDistChart" height="120"></canvas>`;
+                const tableCard = document.createElement('div');
+                tableCard.className = 'card';
+                tableCard.innerHTML = `<div class="card-header">
+      <h3 class="card-title">${cls.name} — Gradebook</h3>
+      <div class="flex gap-8">
+        <span class="badge badge-success">✓ ${rows.filter(r => r.pct >= 75).length} passing</span>
+        <span class="badge badge-danger">✗ ${rows.filter(r => r.pct !== null && r.pct < 50).length} at risk</span>
+      </div>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Student</th>${assignments.map(a => `<th title="${a.title}">${a.title.slice(0, 15)}${a.title.length > 15 ? '...' : ''}<br><span style="font-weight:400;font-size:0.72rem;color:var(--text-muted)">/${a.totalMarks}</span></th>`).join('')}<th>Total</th><th>%</th><th>Grade</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><div class="flex items-center gap-10">${avatarHTML(r.student.name)}<span style="font-weight:600;font-size:0.875rem">${r.student.name}</span></div></td>
+        ${r.grades.map((g, i) => { const cls2 = g === null ? 'pending' : LMS.Helpers.gradeClass(g, assignments[i].totalMarks); return `<td><span class="grade-cell ${cls2}">${g === null ? '—' : g}</span></td>`; }).join('')}
+        <td style="font-weight:700">${r.total}/${r.maxTotal}</td>
+        <td><div class="flex items-center gap-8" style="min-width:80px">${r.pct !== null ? `<div class="progress-bar" style="flex:1"><div class="progress-bar-fill" style="width:${r.pct}%;background:${r.pct >= 75 ? 'var(--color-success)' : r.pct >= 50 ? 'var(--color-warning)' : 'var(--color-danger)'}"></div></div><span style="font-size:0.8rem;font-weight:700">${r.pct}%</span>` : '—'}</div></td>
+        <td>${r.pct === null ? '<span class="badge badge-muted">N/A</span>' : r.pct >= 75 ? '<span class="badge badge-success">A</span>' : r.pct >= 60 ? '<span class="badge badge-primary">B</span>' : r.pct >= 50 ? '<span class="badge badge-warning">C</span>' : '<span class="badge badge-danger">F</span>'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+
+                const content = document.getElementById('gradebookContent');
+                content.innerHTML = '';
+                content.appendChild(chartWrap);
+                content.appendChild(tableCard);
+
+                if (chartInst) chartInst.destroy();
+                chartInst = new Chart(document.getElementById('gradeDistChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: rows.map(r => r.student.name.split(' ')[0]),
+                        datasets: [{ label: 'Score %', data: rows.map(r => r.pct || 0), backgroundColor: rows.map(r => r.pct === null ? '#64748b' : r.pct >= 75 ? '#10b981' : r.pct >= 50 ? '#f59e0b' : '#f43f5e'), borderRadius: 6 }]
+                    },
+                    options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { display: false } }, y: { min: 0, max: 100, ticks: { color: '#94a3b8', callback: v => v + '%' }, grid: { color: 'rgba(148,163,184,0.08)' } } } }
+                });
+            }
+            window.loadGradebook = loadGradebook;
+
+            window.exportCSV = () => {
+                if (!currentClsId) { Toast.warning('Select a class first'); return; }
+                const cls = LMS.Classes.getById(currentClsId);
+                const students = LMS.Classes.getStudents(currentClsId);
+                const assignments = LMS.Assignments.getByClass(currentClsId);
+                const header = ['Student', 'Email', ...assignments.map(a => a.title), 'Total %'];
+                const rows = students.map(st => {
+                    const grades = assignments.map(a => { const sub = LMS.Submissions.getByStudentAndAssignment(st.id, a.id); return sub?.grade ?? ''; });
+                    const scored = grades.filter(g => g !== '');
+                    const total = scored.reduce((s, g) => s + Number(g), 0);
+                    const maxTotal = assignments.filter((_, i) => grades[i] !== '').reduce((s, a) => s + a.totalMarks, 0);
+                    return [st.name, st.email, ...grades, maxTotal > 0 ? Math.round((total / maxTotal) * 100) + '%' : ''];
+                });
+                const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+                const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+                a.download = `${cls.subject}_Gradebook.csv`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                Toast.success('CSV exported!');
+            };
+        }
+    </script>
+</body>
+
+</html>

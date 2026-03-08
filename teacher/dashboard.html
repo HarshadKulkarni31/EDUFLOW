@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div>
+                <span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item" href="gradebook.html"><span class="nav-icon">📊</span> Gradebook</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- Navbar -->
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title">Teacher Dashboard</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12 navbar-avatar" id="navbarUser"></div>
+            </div>
+        </header>
+
+        <!-- Main -->
+        <main class="main-content">
+            <div class="page-header">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 id="welcomeMsg">Good morning! 👋</h1>
+                        <p>Here's an overview of your teaching activity</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openCreateClass()">＋ New Class</button>
+                </div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="grid grid-4 mb-24" id="statsGrid"></div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-2 mb-24" id="chartsRow">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📊 Submission Status</h3>
+                    </div>
+                    <canvas id="submissionChart" height="220"></canvas>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📈 Students per Class</h3>
+                    </div>
+                    <canvas id="classChart" height="220"></canvas>
+                </div>
+            </div>
+
+            <!-- Bottom Row -->
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📚 My Classes</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="openCreateClass()">＋ Add</button>
+                    </div>
+                    <div id="classesGrid"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">🕐 Recent Activity</h3>
+                    </div>
+                    <div id="activityFeed"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('teacher');
+        if (user) {
+            initNavbar(user);
+            initSidebarUser(user);
+            initSidebar();
+            renderSidebarNotifDrawer(user.id);
+
+            const hour = new Date().getHours();
+            document.getElementById('welcomeMsg').textContent =
+                (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') + `, ${user.name.split(' ')[0]}! 👋`;
+
+            const classes = LMS.Classes.getByTeacher(user.id);
+            initSidebarClasses(classes, './');
+
+            // Stats
+            const allAssignments = classes.flatMap(c => LMS.Assignments.getByClass(c.id));
+            const allSubmissions = allAssignments.flatMap(a => LMS.Submissions.getByAssignment(a.id));
+            const pendingGrading = allSubmissions.filter(s => s.grade === null).length;
+            const totalStudents = [...new Set(classes.flatMap(c => LMS.Classes.getStudents(c.id).map(s => s.id)))].length;
+
+            const stats = [
+                { label: 'Total Classes', value: classes.length, icon: '🏫', color: '#6366f1' },
+                { label: 'Total Students', value: totalStudents, icon: '🧑‍🎓', color: '#10b981' },
+                { label: 'Pending Grading', value: pendingGrading, icon: '📋', color: '#f59e0b' },
+                { label: 'Submissions', value: allSubmissions.length, icon: '📤', color: '#38bdf8' },
+            ];
+            document.getElementById('statsGrid').innerHTML = stats.map(s => `
+    <div class="stat-card" style="--accent-color:${s.color}">
+      <div class="stat-icon" style="background:${s.color}">${s.icon}</div>
+      <div class="stat-info">
+        <div class="stat-value">${s.value}</div>
+        <div class="stat-label">${s.label}</div>
+      </div>
+    </div>`).join('');
+
+            // Charts
+            const submitted = allSubmissions.length;
+            const total = allAssignments.reduce((acc, a) => acc + LMS.Classes.getStudents(a.classId).length, 0);
+            const missing = Math.max(0, total - submitted);
+            const graded = allSubmissions.filter(s => s.grade !== null).length;
+
+            new Chart(document.getElementById('submissionChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Submitted', 'Graded', 'Missing'],
+                    datasets: [{ data: [submitted - graded, graded, missing], backgroundColor: ['#6366f1', '#10b981', '#f43f5e'], borderWidth: 0, hoverOffset: 6 }]
+                },
+                options: { plugins: { legend: { labels: { color: '#94a3b8', padding: 16, font: { size: 12 } } } }, cutout: '65%' }
+            });
+
+            new Chart(document.getElementById('classChart'), {
+                type: 'bar',
+                data: {
+                    labels: classes.map(c => c.subject || c.name.split(' ')[0]),
+                    datasets: [{ label: 'Students', data: classes.map(c => c.studentCount || LMS.Classes.getStudents(c.id).length), backgroundColor: '#6366f1', borderRadius: 6 }]
+                },
+                options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { display: false } }, y: { ticks: { color: '#94a3b8', stepSize: 1 }, grid: { color: 'rgba(148,163,184,0.08)' } } } }
+            });
+
+            // Classes mini list
+            if (!classes.length) {
+                document.getElementById('classesGrid').innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏫</div><h3>No classes yet</h3><p>Click "New Class" to create your first class</p></div>';
+            } else {
+                document.getElementById('classesGrid').innerHTML = classes.map(c => `
+      <a href="class.html?id=${c.id}" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;transition:background 0.2s;cursor:pointer;text-decoration:none" onmouseover="this.style.background='rgba(99,102,241,0.07)'" onmouseout="this.style.background=''">
+        <div style="width:40px;height:40px;border-radius:10px;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">🏫</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.875rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted)">${c.subject} · ${c.studentCount || 0} students</div>
+        </div>
+        <div class="join-code" onclick="event.preventDefault();copyText('${c.joinCode}')" title="Copy join code">${c.joinCode}</div>
+      </a>`).join('');
+            }
+
+            // Activity
+            const subs = allSubmissions.slice(-5).reverse();
+            if (!subs.length) {
+                document.getElementById('activityFeed').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><h3>No recent activity</h3></div>';
+            } else {
+                document.getElementById('activityFeed').innerHTML = subs.map(s => {
+                    const st = LMS.Helpers.getUser(s.studentId);
+                    const a = LMS.Assignments.getById(s.assignmentId);
+                    return `<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+        ${avatarHTML(st?.name || '??', 'avatar-sm')}
+        <div>
+          <div style="font-size:0.85rem;font-weight:600">${st?.name || 'Unknown'}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted)">Submitted "${a?.title || 'Assignment'}" · ${LMS.Helpers.timeAgo(s.submittedAt)}</div>
+        </div>
+        ${s.grade === null ? '<span class="badge badge-warning" style="margin-left:auto">Grade</span>' : `<span class="badge badge-success" style="margin-left:auto">${s.grade}/${a?.totalMarks}</span>`}
+      </div>`;
+                }).join('');
+            }
+
+            // Create class modal
+            window.openCreateClass = () => {
+                const id = Modal.create('Create New Class',
+                    `<div class="flex flex-col gap-16">
+        <div class="form-group"><label class="form-label">Class Name *</label><input id="mc_name" class="form-control" placeholder="e.g., Introduction to Computer Science" required></div>
+        <div class="flex gap-12">
+          <div class="form-group" style="flex:1"><label class="form-label">Subject Code *</label><input id="mc_subject" class="form-control" placeholder="e.g., CS101"></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Section</label><input id="mc_section" class="form-control" placeholder="e.g., A"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Join Code *</label>
+          <div class="flex gap-8"><input id="mc_code" class="form-control" placeholder="e.g., CS101A">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('mc_code').value='CLS'+Math.random().toString(36).substr(2,4).toUpperCase()">Generate</button></div>
+        </div>
+      </div>`,
+                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
+       <button class="btn btn-primary" onclick="doCreateClass('${id}')">Create Class</button>`
+                );
+                setTimeout(() => { document.getElementById('mc_code').value = 'CLS' + Math.random().toString(36).substr(2, 4).toUpperCase(); }, 50);
+            };
+
+            window.doCreateClass = (modalId) => {
+                const name = document.getElementById('mc_name').value.trim();
+                const subject = document.getElementById('mc_subject').value.trim();
+                const section = document.getElementById('mc_section').value.trim();
+                const joinCode = document.getElementById('mc_code').value.trim().toUpperCase();
+                if (!name || !subject || !joinCode) { Toast.error('Please fill in required fields'); return; }
+                LMS.Classes.create({ name, subject, section, teacherId: user.id, joinCode });
+                Modal.close(modalId);
+                Toast.success('Class created! Refreshing...');
+                setTimeout(() => window.location.reload(), 800);
+            };
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item" href="grades.html"><span class="nav-icon">⭐</span> My Grades</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title" id="navbarTitle">Class</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12" id="navbarUser"></div>
+            </div>
+        </header>
+        <main class="main-content">
+            <!-- Class Banner -->
+            <div id="classHeader" class="mb-24" style="border-radius:var(--radius);overflow:hidden">
+                <div id="classHeroBanner"
+                    style="padding:32px;background:linear-gradient(135deg,#6366f1,#4338ca);position:relative;min-height:140px">
+                    <div style="position:absolute;inset:0;overflow:hidden">
+                        <div
+                            style="position:absolute;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,0.07);top:-60px;right:-40px">
+                        </div>
+                    </div>
+                    <div style="position:relative;z-index:1">
+                        <h1 id="className" style="font-size:1.8rem;font-weight:800;margin-bottom:6px">Loading...</h1>
+                        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                            <span id="classSubject" style="color:rgba(255,255,255,0.8)"></span>
+                            <span id="classSection" style="color:rgba(255,255,255,0.7)"></span>
+                            <span id="classTeacher" style="color:rgba(255,255,255,0.7)"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs" id="classTabs">
+                <button class="tab-btn" data-tab="tab-stream">📢 Stream</button>
+                <button class="tab-btn" data-tab="tab-classwork">📝 Classwork</button>
+                <button class="tab-btn" data-tab="tab-materials">📚 Materials</button>
+            </div>
+
+            <!-- Stream -->
+            <div class="tab-pane" id="tab-stream">
+                <div id="streamList"></div>
+            </div>
+
+            <!-- Classwork -->
+            <div class="tab-pane" id="tab-classwork">
+                <div class="section-header">
+                    <h2 class="section-title">Assignments</h2>
+                    <div class="flex gap-8">
+                        <span class="badge badge-success" id="submittedCount"></span>
+                        <span class="badge badge-danger" id="missingCount"></span>
+                    </div>
+                </div>
+                <div id="assignmentList"></div>
+            </div>
+
+            <!-- Materials -->
+            <div class="tab-pane" id="tab-materials">
+                <div class="section-header">
+                    <h2 class="section-title">Study Materials</h2>
+                </div>
+                <div id="materialList"></div>
+            </div>
+        </main>
+    </div>
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('student');
+        let cls = null, classId = null;
+
+        if (user) {
+            classId = new URLSearchParams(window.location.search).get('id');
+            cls = LMS.Classes.getById(classId);
+            const enrolled = LMS.Classes.getStudents(classId).some(s => s.id === user.id);
+            if (!cls || !enrolled) { window.location.href = 'dashboard.html'; }
+
+            initNavbar(user); initSidebarUser(user); initSidebar();
+            renderSidebarNotifDrawer(user.id);
+            const myClasses = LMS.Classes.getByStudent(user.id);
+            initSidebarClasses(myClasses, './');
+
+            const teacher = LMS.Helpers.getUser(cls.teacherId);
+            document.getElementById('navbarTitle').textContent = cls.name;
+            document.getElementById('className').textContent = cls.name;
+            document.getElementById('classSubject').textContent = '📚 ' + cls.subject;
+            document.getElementById('classSection').textContent = cls.section ? '· Section ' + cls.section : '';
+            document.getElementById('classTeacher').textContent = `· ${teacher?.name || 'Teacher'}`;
+            document.getElementById('classHeroBanner').style.background = `linear-gradient(135deg, ${cls.color}, ${cls.color}99)`;
+
+            initTabs('#classTabs');
+            renderStream();
+            renderClasswork();
+            renderMaterials();
+
+            function renderStream() {
+                const announcements = LMS.Announcements.getByClass(classId);
+                const el = document.getElementById('streamList');
+                if (!announcements.length) {
+                    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📢</div><h3>No announcements yet</h3><p>Your teacher will post updates here</p></div>';
+                    return;
+                }
+                el.innerHTML = announcements.map(ann => {
+                    const author = LMS.Helpers.getUser(ann.authorId);
+                    return `<div class="announcement-card">
+        <div class="announcement-header">
+          ${avatarHTML(author?.name || 'T')}
+          <div class="flex-col">
+            <span style="font-size:0.875rem;font-weight:600">${author?.name || 'Teacher'}</span>
+            <span class="announcement-meta">${LMS.Helpers.formatDateTime(ann.timestamp)}</span>
+          </div>
+        </div>
+        <p class="announcement-text">${ann.text}</p>
+        ${ann.attachments?.length ? `<div class="announcement-attach">${ann.attachments.map(f => `<div class="attach-tag">📎 ${f}</div>`).join('')}</div>` : ''}
+        <div class="comment-section">
+          <div id="comments_${ann.id}">${(ann.comments || []).map(c => { const cu = LMS.Helpers.getUser(c.authorId); return `<div class="comment">${avatarHTML(cu?.name || '?')}<div class="comment-body"><div class="comment-author">${cu?.name || 'User'}</div><p>${c.text}</p></div></div>`; }).join('')}</div>
+          <div class="comment-input-row">
+            ${avatarHTML(user.name)}
+            <input type="text" class="form-control" placeholder="Add a comment…" id="commentInput_${ann.id}" onkeypress="if(event.key==='Enter')addComment('${ann.id}')">
+            <button class="btn btn-secondary btn-sm" onclick="addComment('${ann.id}')">Post</button>
+          </div>
+        </div>
+      </div>`;
+                }).join('');
+            }
+
+            window.addComment = (annId) => {
+                const input = document.getElementById(`commentInput_${annId}`);
+                const text = input?.value.trim();
+                if (!text) return;
+                LMS.Announcements.addComment(annId, { authorId: user.id, text });
+                input.value = '';
+                document.getElementById(`comments_${annId}`).insertAdjacentHTML('beforeend', `<div class="comment">${avatarHTML(user.name)}<div class="comment-body"><div class="comment-author">${user.name}</div><p>${text}</p></div></div>`);
+                Toast.success('Comment posted');
+            };
+
+            function renderClasswork() {
+                const assignments = LMS.Assignments.getByClass(classId);
+                const el = document.getElementById('assignmentList');
+                const submitted = assignments.filter(a => LMS.Submissions.getByStudentAndAssignment(user.id, a.id));
+                const missing = assignments.filter(a => !LMS.Submissions.getByStudentAndAssignment(user.id, a.id));
+                document.getElementById('submittedCount').textContent = `✓ ${submitted.length} submitted`;
+                document.getElementById('missingCount').textContent = `✗ ${missing.length} missing`;
+                if (!assignments.length) {
+                    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><h3>No assignments yet</h3></div>';
+                    return;
+                }
+                el.innerHTML = assignments.map(a => {
+                    const sub = LMS.Submissions.getByStudentAndAssignment(user.id, a.id);
+                    const due = LMS.Helpers.dueDateStatus(a.dueDate);
+                    const isLate = sub && new Date(sub.submittedAt) > new Date(a.dueDate);
+                    let badge = sub ? (isLate ? '<span class="badge badge-warning">Late</span>' : '<span class="badge badge-success">Submitted</span>') : (new Date(a.dueDate) < Date.now() ? '<span class="badge badge-danger">Missing</span>' : '<span class="badge badge-muted">Pending</span>');
+                    return `<div class="assignment-card" onclick="openAssignment('${a.id}')">
+        <div class="assignment-icon">📝</div>
+        <div class="assignment-info">
+          <h4>${a.title}</h4>
+          <div class="assignment-meta">
+            <span class="due-date-badge ${due.cls}">📅 ${due.label}</span>
+            <span>${a.totalMarks} marks</span>
+            ${sub?.grade !== null && sub?.grade !== undefined ? `<span class="text-success font-bold">Grade: ${sub.grade}/${a.totalMarks}</span>` : ''}
+          </div>
+        </div>
+        ${badge}
+      </div>`;
+                }).join('');
+            }
+
+            window.openAssignment = (asgnId) => {
+                const a = LMS.Assignments.getById(asgnId);
+                const sub = LMS.Submissions.getByStudentAndAssignment(user.id, asgnId);
+                const due = LMS.Helpers.dueDateStatus(a.dueDate);
+                const isOverdue = new Date(a.dueDate) < Date.now();
+
+                const gradeSection = sub?.grade !== null && sub?.grade !== undefined ? `
+      <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:16px;margin-top:16px">
+        <div style="font-weight:700;color:var(--color-success);margin-bottom:8px">⭐ Your Grade</div>
+        <div style="font-size:1.5rem;font-weight:800">${sub.grade} / ${a.totalMarks} <span style="font-size:0.9rem;color:var(--text-muted)">(${Math.round((sub.grade / a.totalMarks) * 100)}%)</span></div>
+        ${sub.feedback ? `<div style="margin-top:8px;font-size:0.85rem;color:var(--text-secondary)"><strong>Feedback:</strong> ${sub.feedback}</div>` : ''}
+      </div>` : '';
+
+                const submittedSection = sub ? `
+      <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;margin-top:16px">
+        <div style="font-size:0.85rem;font-weight:600;color:var(--color-primary)">✓ Submitted ${LMS.Helpers.formatDateTime(sub.submittedAt)}</div>
+        ${sub.fileUrl ? `<div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">📎 ${sub.fileUrl}</div>` : ''}
+        ${sub.content ? `<div style="font-size:0.85rem;color:var(--text-secondary);margin-top:8px;padding:8px;background:var(--glass);border-radius:6px">"${sub.content}"</div>` : ''}
+      </div>` : '';
+
+                const id = Modal.create(a.title,
+                    `<div>
+        <div class="flex gap-12 mb-16 flex-wrap">
+          <span class="badge badge-primary">${a.totalMarks} marks</span>
+          <span class="due-date-badge ${due.cls} badge">📅 ${due.label}</span>
+          ${a.attachments?.length ? a.attachments.map(f => `<span class="attach-tag">📎 ${f}</span>`).join('') : ''}
+        </div>
+        <p style="color:var(--text-secondary);font-size:0.9rem;line-height:1.7">${a.description || 'No description provided.'}</p>
+        ${gradeSection}
+        ${submittedSection}
+        ${!isOverdue || !sub ? `<div class="divider"></div>
+        <h4 style="margin-bottom:16px;font-size:0.95rem">📤 ${sub ? 'Resubmit' : 'Submit'} Assignment</h4>
+        <div class="flex flex-col gap-14">
+          <div class="form-group"><label class="form-label">Text Response</label><textarea id="sub_text" class="form-control" rows="3" placeholder="Type your answer…">${sub?.content || ''}</textarea></div>
+          <div class="form-group"><label class="form-label">File Name (simulated)</label><input id="sub_file" class="form-control" placeholder="e.g., my_assignment.zip" value="${sub?.fileUrl || ''}"></div>
+        </div>` : ''}
+      </div>`,
+                    (!isOverdue || !sub) ? `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button><button class="btn btn-primary" onclick="doSubmit('${asgnId}','${id}')">📤 ${sub ? 'Resubmit' : 'Submit'}</button>` :
+                        `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Close</button>`
+                );
+            };
+
+            window.doSubmit = (asgnId, modalId) => {
+                const content = document.getElementById('sub_text')?.value.trim() || '';
+                const fileUrl = document.getElementById('sub_file')?.value.trim() || '';
+                if (!content && !fileUrl) { Toast.error('Please add a text response or file name'); return; }
+                LMS.Submissions.submit({ assignmentId: asgnId, studentId: user.id, content, fileUrl });
+                Modal.close(modalId);
+                Toast.success('Assignment submitted!');
+                renderClasswork();
+            };
+
+            function renderMaterials() {
+                const mats = LMS.Materials.getByClass(classId);
+                const el = document.getElementById('materialList');
+                if (!mats.length) {
+                    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📚</div><h3>No materials yet</h3><p>Your teacher will add study materials here</p></div>';
+                    return;
+                }
+                const icons = { pdf: '📄', video: '🎬', link: '🔗', doc: '📃' };
+                el.innerHTML = mats.map(m => `<div class="material-card">
+      <div class="material-icon ${m.type}">${icons[m.type] || '📁'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.9rem;font-weight:600">${m.title}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted)">${m.type.toUpperCase()} · ${LMS.Helpers.formatDate(m.uploadedAt)}</div>
+      </div>
+      <div class="flex gap-8">
+        ${m.url && m.url !== '#' ? `<a href="${m.url}" target="_blank" class="btn btn-primary btn-sm">Open ↗</a>` : '<span class="btn btn-secondary btn-sm" style="cursor:default">📥 Download</span>'}
+      </div>
+    </div>`).join('');
+            }
+        }
+    </script>
+</body>
+
+</html>

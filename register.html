@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduFlow LMS — Create Account</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+
+<body>
+    <div class="auth-page">
+        <div class="auth-split animate-fade-in">
+            <!-- Hero -->
+            <div class="auth-hero">
+                <div class="auth-hero-logo">
+                    <div class="logo-icon">🎓</div>
+                    <h1>Edu<span>Flow</span></h1>
+                </div>
+                <div class="auth-hero-content">
+                    <h2>Join EduFlow today</h2>
+                    <p>Create your account in seconds and start managing your learning journey with powerful tools.</p>
+                    <div class="auth-feature-list">
+                        <div class="auth-feature">
+                            <div class="auth-feature-icon">🆓</div><span>Completely free to use</span>
+                        </div>
+                        <div class="auth-feature">
+                            <div class="auth-feature-icon">⚡</div><span>Set up classes in under a minute</span>
+                        </div>
+                        <div class="auth-feature">
+                            <div class="auth-feature-icon">🔒</div><span>Secure and private by design</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form -->
+            <div class="auth-form-panel">
+                <div class="auth-form-header">
+                    <h2>Create Account</h2>
+                    <p>Fill in your details to get started</p>
+                </div>
+
+                <div class="role-toggle" id="roleToggle">
+                    <button class="role-btn active" data-role="teacher" onclick="setRole('teacher', this)">🧑‍🏫
+                        Teacher</button>
+                    <button class="role-btn" data-role="student" onclick="setRole('student', this)">🧑‍🎓
+                        Student</button>
+                </div>
+
+                <form class="auth-form" id="registerForm" onsubmit="handleRegister(event)">
+                    <div class="auth-form .form-row">
+                        <div class="flex gap-12">
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">First Name</label>
+                                <input type="text" class="form-control" id="firstName" placeholder="First name"
+                                    required>
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="lastName" placeholder="Last name" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" class="form-control" id="email" placeholder="your@email.com" required>
+                    </div>
+
+                    <div id="teacherFields">
+                        <div class="form-group">
+                            <label class="form-label">Department / Subject</label>
+                            <input type="text" class="form-control" id="department"
+                                placeholder="e.g., Computer Science">
+                        </div>
+                    </div>
+
+                    <div id="studentFields" class="hidden">
+                        <div class="flex gap-12">
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">Roll Number</label>
+                                <input type="text" class="form-control" id="rollNo" placeholder="e.g., CS2024001">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label class="form-label">Division</label>
+                                <input type="text" class="form-control" id="division" placeholder="e.g., A">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <div class="password-field">
+                            <input type="password" class="form-control" id="password" placeholder="Min. 6 characters"
+                                required minlength="6">
+                            <button type="button" class="password-toggle"
+                                onclick="togglePwd('password', this)">👁</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Confirm Password</label>
+                        <div class="password-field">
+                            <input type="password" class="form-control" id="confirmPwd" placeholder="Repeat password"
+                                required minlength="6">
+                            <button type="button" class="password-toggle"
+                                onclick="togglePwd('confirmPwd', this)">👁</button>
+                        </div>
+                    </div>
+
+                    <div id="errorMsg" class="hidden"
+                        style="background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.3);border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#f43f5e">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-full btn-lg" id="registerBtn">Create Account</button>
+                </form>
+
+                <div class="divider"></div>
+                <div class="auth-link">Already have an account? <a href="index.html">Sign in →</a></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script>
+        let selectedRole = 'teacher';
+
+        function setRole(role, btn) {
+            selectedRole = role;
+            document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('teacherFields').classList.toggle('hidden', role !== 'teacher');
+            document.getElementById('studentFields').classList.toggle('hidden', role !== 'student');
+        }
+
+        function togglePwd(id, btn) {
+            const input = document.getElementById(id);
+            input.type = input.type === 'password' ? 'text' : 'password';
+            btn.textContent = input.type === 'password' ? '👁' : '🙈';
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = '✕  ' + msg;
+            el.classList.remove('hidden');
+        }
+
+        function handleRegister(e) {
+            e.preventDefault();
+            document.getElementById('errorMsg').classList.add('hidden');
+            const firstName = document.getElementById('firstName').value.trim();
+            const lastName = document.getElementById('lastName').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPwd = document.getElementById('confirmPwd').value;
+            if (password !== confirmPwd) { showError('Passwords do not match.'); return; }
+            if (password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+
+            const data = {
+                name: `${firstName} ${lastName}`,
+                email, password, role: selectedRole,
+            };
+            if (selectedRole === 'teacher') {
+                data.department = document.getElementById('department').value.trim();
+            } else {
+                data.rollNo = document.getElementById('rollNo').value.trim();
+                data.division = document.getElementById('division').value.trim();
+            }
+
+            const btn = document.getElementById('registerBtn');
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+
+            setTimeout(() => {
+                const result = LMS.Auth.register(data);
+                if (result.error) {
+                    showError(result.error);
+                    btn.disabled = false;
+                    btn.textContent = 'Create Account';
+                    return;
+                }
+                window.location.href = result.user.role === 'teacher' ? 'teacher/dashboard.html' : 'student/dashboard.html';
+            }, 500);
+        }
+    </script>
+</body>
+
+</html>

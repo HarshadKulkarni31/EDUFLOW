@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messages — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item" href="grades.html"><span class="nav-icon">⭐</span> My Grades</a>
+                <a class="nav-item active" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title">Messages</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12" id="navbarUser"></div>
+            </div>
+        </header>
+        <main class="main-content">
+            <div class="page-header">
+                <h1>💬 Messages</h1>
+                <p>Message your teachers and classmates</p>
+            </div>
+            <div style="display:grid;grid-template-columns:300px 1fr;gap:20px;height:calc(100vh - 220px)">
+                <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+                    <div style="padding:16px;border-bottom:1px solid var(--border)">
+                        <div class="search-bar"><span class="search-icon">🔍</span><input type="text"
+                                placeholder="Search…" id="contactSearch" oninput="filterContacts()"></div>
+                    </div>
+                    <div style="flex:1;overflow-y:auto;padding:8px" id="contactList"></div>
+                </div>
+                <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column" id="threadPanel">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                        <div class="empty-state-icon">💬</div>
+                        <h3>Select a contact</h3>
+                        <p>Start a conversation with your teacher or classmate</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('student');
+        let activePartnerId = null;
+        if (user) {
+            initNavbar(user); initSidebarUser(user); initSidebar();
+            renderSidebarNotifDrawer(user.id);
+            const classes = LMS.Classes.getByStudent(user.id);
+            initSidebarClasses(classes, './');
+
+            // Contacts: teachers + classmates
+            const teacherIds = [...new Set(classes.map(c => c.teacherId))];
+            const classmateIds = [...new Set(classes.flatMap(c => LMS.Classes.getStudents(c.id).map(s => s.id)))].filter(id => id !== user.id);
+            const allContactIds = [...teacherIds, ...classmateIds];
+            const allContacts = allContactIds.map(id => LMS.Helpers.getUser(id)).filter(Boolean);
+            let filtered = allContacts;
+
+            function renderContacts() {
+                const convos = LMS.Messages.getConversations(user.id);
+                const el = document.getElementById('contactList');
+                if (!filtered.length) { el.innerHTML = '<p class="text-xs text-muted" style="padding:12px">No contacts found</p>'; return; }
+                const sections = [
+                    { label: 'Teachers', items: filtered.filter(c => c.role === 'teacher') },
+                    { label: 'Classmates', items: filtered.filter(c => c.role === 'student') },
+                ].filter(s => s.items.length);
+                el.innerHTML = sections.map(s => `
+      <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);padding:8px 12px 4px">${s.label}</div>
+      ${s.items.map(c => {
+                    const conv = convos.find(cv => cv.partner?.id === c.id);
+                    const unread = conv?.unread || 0;
+                    return `<div class="nav-item ${activePartnerId === c.id ? 'active' : ''}" onclick="openThread('${c.id}')" style="padding:12px;cursor:pointer;margin-bottom:2px">
+          <div class="flex items-center gap-10" style="width:100%">
+            ${avatarHTML(c.name)}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.85rem;font-weight:600;color:var(--text-primary)">${c.name}</div>
+              <div style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.role === 'teacher' ? '👨‍🏫 Teacher' : '👨‍🎓 Student'}</div>
+            </div>
+            ${unread > 0 ? `<span class="badge badge-primary">${unread}</span>` : ''}
+          </div>
+        </div>`;
+                }).join('')}`).join('');
+            }
+
+            window.filterContacts = () => {
+                const q = document.getElementById('contactSearch').value.toLowerCase();
+                filtered = allContacts.filter(c => c.name.toLowerCase().includes(q));
+                renderContacts();
+            };
+
+            window.openThread = (partnerId) => {
+                activePartnerId = partnerId;
+                const partner = LMS.Helpers.getUser(partnerId);
+                LMS.Messages.markRead(partnerId, user.id);
+                renderContacts();
+                const panel = document.getElementById('threadPanel');
+                panel.innerHTML = `
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+        ${avatarHTML(partner.name)}
+        <div><div style="font-weight:700">${partner.name}</div><div style="font-size:0.78rem;color:var(--text-muted)">${partner.role === 'teacher' ? '👨‍🏫 Teacher' : '👨‍🎓 Student'}</div></div>
+      </div>
+      <div id="msgThread" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px"></div>
+      <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px">
+        <input type="text" class="form-control" id="msgInput" placeholder="Type a message…" onkeypress="if(event.key==='Enter')sendMsg()">
+        <button class="btn btn-primary" onclick="sendMsg()">Send</button>
+      </div>`;
+                renderThread(partnerId);
+                panel.style.display = 'flex'; panel.style.flexDirection = 'column';
+            };
+
+            function renderThread(partnerId) {
+                const thread = LMS.Messages.getThread(user.id, partnerId);
+                const el = document.getElementById('msgThread');
+                if (!el) return;
+                el.innerHTML = thread.map(m => {
+                    const isMe = m.fromId === user.id;
+                    return `<div style="display:flex;flex-direction:${isMe ? 'row-reverse' : 'row'};gap:8px;align-items:flex-end">
+        ${!isMe ? avatarHTML(LMS.Helpers.getUser(partnerId)?.name || '?') : ''}
+        <div style="max-width:70%;background:${isMe ? 'var(--color-primary)' : 'var(--bg-secondary)'};border:${isMe ? 'none' : '1px solid var(--glass-border)'};padding:10px 14px;border-radius:${isMe ? '14px 14px 2px 14px' : '14px 14px 14px 2px'};font-size:0.875rem;color:${isMe ? '#fff' : 'var(--text-primary)'}">
+          ${m.text}
+          <div style="font-size:0.7rem;color:${isMe ? 'rgba(255,255,255,0.6)' : 'var(--text-muted)'};margin-top:4px;text-align:right">${LMS.Helpers.timeAgo(m.timestamp)}</div>
+        </div>
+      </div>`;
+                }).join('');
+                el.scrollTop = el.scrollHeight;
+            }
+
+            window.sendMsg = () => {
+                const input = document.getElementById('msgInput');
+                const text = input?.value.trim();
+                if (!text || !activePartnerId) return;
+                LMS.Messages.send(user.id, activePartnerId, text);
+                input.value = '';
+                renderThread(activePartnerId);
+                renderContacts();
+            };
+
+            renderContacts();
+        }
+    </script>
+</body>
+
+</html>

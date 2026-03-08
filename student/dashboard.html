@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item" href="grades.html"><span class="nav-icon">⭐</span> My Grades</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title">Student Dashboard</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12 navbar-avatar" id="navbarUser"></div>
+            </div>
+        </header>
+        <main class="main-content">
+            <div class="page-header">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 id="welcomeMsg">Welcome! 👋</h1>
+                        <p>Your learning journey at a glance</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openJoinClass()">＋ Join Class</button>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-4 mb-24" id="statsGrid"></div>
+
+            <!-- Charts + Deadlines -->
+            <div class="grid grid-2 mb-24">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📊 Grade Summary</h3>
+                    </div>
+                    <canvas id="gradeChart" height="220"></canvas>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">⏰ Upcoming Deadlines</h3>
+                    </div>
+                    <div id="deadlinesList"></div>
+                </div>
+            </div>
+
+            <!-- Classes + Announcements -->
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📚 My Classes</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="openJoinClass()">＋ Join</button>
+                    </div>
+                    <div id="myClassesList"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">📢 Recent Announcements</h3>
+                    </div>
+                    <div id="announcementsFeed"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('student');
+        if (user) {
+            initNavbar(user); initSidebarUser(user); initSidebar();
+            renderSidebarNotifDrawer(user.id);
+
+            const hour = new Date().getHours();
+            document.getElementById('welcomeMsg').textContent =
+                (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') + `, ${user.name.split(' ')[0]}! 👋`;
+
+            const classes = LMS.Classes.getByStudent(user.id);
+            initSidebarClasses(classes, './');
+
+            const allAssignments = LMS.Assignments.getByStudent(user.id);
+            const mySubmissions = LMS.Submissions.getByStudent(user.id);
+
+            const submitted = allAssignments.filter(a => mySubmissions.some(s => s.assignmentId === a.id));
+            const missing = allAssignments.filter(a => !mySubmissions.some(s => s.assignmentId === a.id));
+            const upcoming = allAssignments.filter(a => new Date(a.dueDate) > Date.now() && !mySubmissions.some(s => s.assignmentId === a.id));
+            const gradedSubs = mySubmissions.filter(s => s.grade !== null);
+            const avgGrade = gradedSubs.length > 0
+                ? Math.round(gradedSubs.reduce((sum, s) => { const a = LMS.Assignments.getById(s.assignmentId); return sum + (a ? (s.grade / a.totalMarks) * 100 : 0); }, 0) / gradedSubs.length)
+                : null;
+
+            // Stats
+            const stats = [
+                { label: 'Enrolled Classes', value: classes.length, icon: '🏫', color: '#6366f1' },
+                { label: 'Upcoming Deadlines', value: upcoming.length, icon: '⏰', color: '#f59e0b' },
+                { label: 'Assignments Submitted', value: submitted.length, icon: '📤', color: '#10b981' },
+                { label: 'Avg Grade', value: avgGrade !== null ? avgGrade + '%' : 'N/A', icon: '⭐', color: '#38bdf8' },
+            ];
+            document.getElementById('statsGrid').innerHTML = stats.map(s => `
+    <div class="stat-card" style="--accent-color:${s.color}">
+      <div class="stat-icon" style="background:${s.color}">${s.icon}</div>
+      <div class="stat-info"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div>
+    </div>`).join('');
+
+            // Grade chart
+            const gradeData = classes.map(c => {
+                const asgns = LMS.Assignments.getByClass(c.id);
+                const subs = asgns.flatMap(a => { const s = LMS.Submissions.getByStudentAndAssignment(user.id, a.id); return s && s.grade !== null ? [{ score: s.grade, total: a.totalMarks }] : []; });
+                const pct = subs.length > 0 ? Math.round(subs.reduce((sum, s) => sum + (s.score / s.total) * 100, 0) / subs.length) : 0;
+                return { name: c.subject, pct };
+            });
+            new Chart(document.getElementById('gradeChart'), {
+                type: 'bar',
+                data: {
+                    labels: gradeData.map(d => d.name),
+                    datasets: [{ label: 'Average %', data: gradeData.map(d => d.pct), backgroundColor: gradeData.map(d => d.pct >= 75 ? '#10b981' : d.pct >= 50 ? '#f59e0b' : '#f43f5e'), borderRadius: 6 }]
+                },
+                options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100, ticks: { color: '#94a3b8', callback: v => v + '%' }, grid: { color: 'rgba(148,163,184,0.08)' } }, y: { ticks: { color: '#94a3b8' }, grid: { display: false } } } }
+            });
+
+            // Deadlines
+            const deadlineEl = document.getElementById('deadlinesList');
+            const upcomingSorted = upcoming.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)).slice(0, 6);
+            if (!upcomingSorted.length) {
+                deadlineEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><h3>All caught up!</h3><p>No upcoming deadlines</p></div>';
+            } else {
+                deadlineEl.innerHTML = upcomingSorted.map(a => {
+                    const due = LMS.Helpers.dueDateStatus(a.dueDate);
+                    const cls = classes.find(c => c.id === a.classId);
+                    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:36px;height:36px;border-radius:8px;background:rgba(245,158,11,0.15);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">📝</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.title}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted)">${cls?.subject || 'Class'}</div>
+        </div>
+        <span class="due-date-badge ${due.cls}" style="font-size:0.75rem;white-space:nowrap">${due.label}</span>
+      </div>`;
+                }).join('');
+            }
+
+            // My classes
+            const myClsEl = document.getElementById('myClassesList');
+            if (!classes.length) {
+                myClsEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏫</div><h3>No classes yet</h3><p>Use the join code from your teacher to enroll</p></div>';
+            } else {
+                myClsEl.innerHTML = classes.map(c => `
+      <a href="class.html?id=${c.id}" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;transition:background 0.2s;cursor:pointer;text-decoration:none" onmouseover="this.style.background='rgba(99,102,241,0.07)'" onmouseout="this.style.background=''">
+        <div style="width:40px;height:40px;border-radius:10px;background:${c.color};display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">🏫</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.875rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted)">${c.subject} · ${LMS.Helpers.getUser(c.teacherId)?.name || 'Teacher'}</div>
+        </div>
+        <span style="font-size:0.78rem;color:var(--text-muted)">→</span>
+      </a>`).join('');
+            }
+
+            // Announcements
+            const annEl = document.getElementById('announcementsFeed');
+            const annList = classes.flatMap(c => LMS.Announcements.getByClass(c.id).map(a => ({ ...a, cls: c }))).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 4);
+            if (!annList.length) {
+                annEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📢</div><h3>No announcements</h3></div>';
+            } else {
+                annEl.innerHTML = annList.map(ann => `
+      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="width:30px;height:30px;border-radius:50%;background:${ann.cls.color};display:flex;align-items:center;justify-content:center;font-size:0.8rem;flex-shrink:0">📢</div>
+          <div>
+            <div style="font-size:0.82rem;font-weight:600">${ann.cls.name}</div>
+            <div style="font-size:0.73rem;color:var(--text-muted)">${LMS.Helpers.timeAgo(ann.timestamp)}</div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${ann.text}</p>
+      </div>`).join('');
+            }
+
+            // Join class modal
+            window.openJoinClass = () => {
+                const id = Modal.create('Join a Class',
+                    `<div class="form-group">
+        <label class="form-label">Enter Join Code</label>
+        <input id="join_code" class="form-control" placeholder="e.g., CS101A" style="text-transform:uppercase;font-size:1.1rem;letter-spacing:0.08em" oninput="this.value=this.value.toUpperCase()">
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:6px">Ask your teacher for the class join code.</p>
+      </div>`,
+                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
+       <button class="btn btn-primary" onclick="doJoinClass('${id}')">Join Class</button>`
+                );
+            };
+            window.doJoinClass = (modalId) => {
+                const code = document.getElementById('join_code').value.trim().toUpperCase();
+                if (!code) { Toast.error('Please enter a join code'); return; }
+                const result = LMS.Classes.joinByCode(code, user.id);
+                if (result.error) { Toast.error(result.error); return; }
+                Modal.close(modalId);
+                Toast.success(`Joined "${result.class.name}"! Loading...`);
+                setTimeout(() => window.location.reload(), 800);
+            };
+        }
+    </script>
+</body>
+
+</html>

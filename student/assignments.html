@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Assignments — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item active" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item" href="grades.html"><span class="nav-icon">⭐</span> My Grades</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title">My Assignments</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12" id="navbarUser"></div>
+            </div>
+        </header>
+        <main class="main-content">
+            <div class="page-header">
+                <div class="flex items-center justify-between flex-wrap gap-12">
+                    <div>
+                        <h1>📝 My Assignments</h1>
+                        <p>All assignments across your enrolled classes</p>
+                    </div>
+                    <div class="flex gap-12">
+                        <select class="form-control" id="classFilter" style="width:200px"
+                            onchange="renderAssignments()">
+                            <option value="">All Classes</option>
+                        </select>
+                        <select class="form-control" id="statusFilter" style="width:160px"
+                            onchange="renderAssignments()">
+                            <option value="">All Status</option>
+                            <option value="submitted">Submitted</option>
+                            <option value="missing">Missing</option>
+                            <option value="graded">Graded</option>
+                            <option value="upcoming">Upcoming</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <!-- Summary row -->
+            <div class="grid grid-4 mb-24" id="summaryCards"></div>
+            <div class="card">
+                <div id="assignmentsTable"></div>
+            </div>
+        </main>
+    </div>
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('student');
+        if (user) {
+            initNavbar(user); initSidebarUser(user); initSidebar();
+            renderSidebarNotifDrawer(user.id);
+            const classes = LMS.Classes.getByStudent(user.id);
+            initSidebarClasses(classes, './');
+            const classFilter = document.getElementById('classFilter');
+            classes.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; classFilter.appendChild(o); });
+
+            const allAssignments = LMS.Assignments.getByStudent(user.id);
+            const mySubmissions = LMS.Submissions.getByStudent(user.id);
+            const submitted = allAssignments.filter(a => mySubmissions.some(s => s.assignmentId === a.id));
+            const missing = allAssignments.filter(a => !mySubmissions.some(s => s.assignmentId === a.id) && new Date(a.dueDate) < Date.now());
+            const upcoming = allAssignments.filter(a => !mySubmissions.some(s => s.assignmentId === a.id) && new Date(a.dueDate) > Date.now());
+            const graded = mySubmissions.filter(s => s.grade !== null);
+
+            document.getElementById('summaryCards').innerHTML = [
+                { label: 'Total', value: allAssignments.length, icon: '📋', color: '#6366f1' },
+                { label: 'Submitted', value: submitted.length, icon: '✅', color: '#10b981' },
+                { label: 'Missing', value: missing.length, icon: '❌', color: '#f43f5e' },
+                { label: 'Graded', value: graded.length, icon: '⭐', color: '#f59e0b' },
+            ].map(s => `<div class="stat-card" style="--accent-color:${s.color}"><div class="stat-icon" style="background:${s.color}">${s.icon}</div><div class="stat-info"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div></div>`).join('');
+
+            function renderAssignments() {
+                const cId = classFilter.value;
+                const status = document.getElementById('statusFilter').value;
+                let list = cId ? allAssignments.filter(a => a.classId === cId) : allAssignments;
+                if (status === 'submitted') list = list.filter(a => mySubmissions.some(s => s.assignmentId === a.id));
+                if (status === 'missing') list = list.filter(a => !mySubmissions.some(s => s.assignmentId === a.id) && new Date(a.dueDate) < Date.now());
+                if (status === 'graded') list = list.filter(a => mySubmissions.some(s => s.assignmentId === a.id && s.grade !== null));
+                if (status === 'upcoming') list = list.filter(a => !mySubmissions.some(s => s.assignmentId === a.id) && new Date(a.dueDate) > Date.now());
+                list.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+                const el = document.getElementById('assignmentsTable');
+                if (!list.length) { el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><h3>No assignments found</h3></div>'; return; }
+                el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Assignment</th><th>Class</th><th>Due</th><th>Marks</th><th>Status</th><th>Grade</th><th style="text-align:right">Action</th></tr></thead>
+      <tbody>${list.map(a => {
+                    const cls = classes.find(c => c.id === a.classId);
+                    const sub = mySubmissions.find(s => s.assignmentId === a.id);
+                    const due = LMS.Helpers.dueDateStatus(a.dueDate);
+                    const isLate = sub && new Date(sub.submittedAt) > new Date(a.dueDate);
+                    let status;
+                    if (sub) status = isLate ? '<span class="badge badge-warning">Late</span>' : '<span class="badge badge-success">Submitted</span>';
+                    else if (new Date(a.dueDate) < Date.now()) status = '<span class="badge badge-danger">Missing</span>';
+                    else status = '<span class="badge badge-muted">Pending</span>';
+                    const grade = sub?.grade !== null && sub?.grade !== undefined ? `<span class="grade-cell ${LMS.Helpers.gradeClass(sub.grade, a.totalMarks)}">${sub.grade}/${a.totalMarks}</span>` : '<span class="text-muted">—</span>';
+                    return `<tr>
+          <td><div style="font-weight:600;font-size:0.875rem">${a.title}</div></td>
+          <td><span class="badge badge-muted">${cls?.subject || 'Class'}</span></td>
+          <td><span class="due-date-badge ${due.cls}">${due.label}</span></td>
+          <td style="font-weight:600">${a.totalMarks}</td>
+          <td>${status}</td>
+          <td>${grade}</td>
+          <td style="text-align:right"><a href="class.html?id=${a.classId}#tab-classwork" class="btn btn-primary btn-sm">Open</a></td>
+        </tr>`;
+                }).join('')}</tbody></table></div>`;
+            }
+            renderAssignments();
+        }
+    </script>
+</body>
+
+</html>

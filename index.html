@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EduFlow LMS — Login</title>
+  <meta name="description" content="EduFlow Learning Management System — Teacher and Student portal for managing classes, assignments, and progress.">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-split animate-fade-in">
+      <!-- Hero Panel -->
+      <div class="auth-hero">
+        <div class="auth-hero-logo">
+          <div class="logo-icon">🎓</div>
+          <h1>Edu<span>Flow</span></h1>
+        </div>
+        <div class="auth-hero-content">
+          <h2>A smarter way to learn & teach</h2>
+          <p>Manage classes, assignments, grades, and communication — all in one beautiful platform.</p>
+          <div class="auth-feature-list">
+            <div class="auth-feature"><div class="auth-feature-icon">📚</div><span>Organize classes and course materials</span></div>
+            <div class="auth-feature"><div class="auth-feature-icon">📝</div><span>Create and grade assignments effortlessly</span></div>
+            <div class="auth-feature"><div class="auth-feature-icon">📊</div><span>Track student progress with rich analytics</span></div>
+            <div class="auth-feature"><div class="auth-feature-icon">💬</div><span>Communicate through built-in messaging</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Panel -->
+      <div class="auth-form-panel">
+        <div class="auth-form-header">
+          <h2>Welcome back 👋</h2>
+          <p>Sign in to your EduFlow account to continue</p>
+        </div>
+
+        <div class="role-toggle" id="roleToggle">
+          <button class="role-btn active" data-role="teacher" onclick="setRole('teacher', this)">🧑‍🏫 Teacher</button>
+          <button class="role-btn" data-role="student" onclick="setRole('student', this)">🧑‍🎓 Student</button>
+        </div>
+
+        <form class="auth-form" id="loginForm" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="email">Email Address</label>
+            <input type="email" class="form-control" id="email" placeholder="Enter your email" required autocomplete="email">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <div class="password-field">
+              <input type="password" class="form-control" id="password" placeholder="Enter your password" required autocomplete="current-password">
+              <button type="button" class="password-toggle" onclick="togglePassword('password', this)">👁</button>
+            </div>
+          </div>
+
+          <div class="demo-hint" id="demoHint" style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:12px 14px;font-size:0.82rem;color:var(--text-secondary)">
+            <strong style="color:var(--color-primary)">Demo credentials:</strong><br>
+            <span id="demoEmail">teacher@lms.com</span> / <code style="color:var(--text-primary)">password</code>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-full btn-lg" id="loginBtn">
+            <span>Sign In</span>
+          </button>
+        </form>
+
+        <div class="divider"></div>
+        <div class="auth-link">
+          Don't have an account? <a href="register.html">Create one →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script>
+    // Redirect if already logged in
+    const currentUser = LMS.Auth.getCurrentUser();
+    if (currentUser) {
+      window.location.href = currentUser.role === 'teacher' ? 'teacher/dashboard.html' : 'student/dashboard.html';
+    }
+
+    let selectedRole = 'teacher';
+
+    function setRole(role, btn) {
+      selectedRole = role;
+      document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const demos = { teacher: 'teacher@lms.com', student: 'student@lms.com' };
+      document.getElementById('demoEmail').textContent = demos[role];
+      document.getElementById('email').value = '';
+      document.getElementById('password').value = '';
+    }
+
+    function togglePassword(id, btn) {
+      const input = document.getElementById(id);
+      if (input.type === 'password') { input.type = 'text'; btn.textContent = '🙈'; }
+      else { input.type = 'password'; btn.textContent = '👁'; }
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('loginBtn');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span style="animation:spin 0.8s linear infinite;display:inline-block">⟳</span> Signing in...';
+
+      setTimeout(() => {
+        const user = LMS.Auth.login(email, password);
+        if (!user) {
+          btn.disabled = false;
+          btn.innerHTML = '<span>Sign In</span>';
+          // Show error
+          const err = document.createElement('div');
+          err.style.cssText = 'background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.3);border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#f43f5e;margin-top:4px';
+          err.textContent = '✕  Invalid email or password. Please try again.';
+          const form = document.getElementById('loginForm');
+          const existing = form.querySelector('.login-error');
+          if (existing) existing.remove();
+          err.className = 'login-error';
+          form.appendChild(err);
+          return;
+        }
+        if (user.role !== selectedRole) {
+          LMS.Auth.logout();
+          btn.disabled = false;
+          btn.innerHTML = '<span>Sign In</span>';
+          const err = document.createElement('div');
+          err.style.cssText = 'background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.3);border-radius:8px;padding:10px 14px;font-size:0.85rem;color:#f43f5e;margin-top:4px';
+          err.textContent = `✕  This account is registered as a ${user.role}. Please select the correct role.`;
+          err.className = 'login-error';
+          const form = document.getElementById('loginForm');
+          const existing = form.querySelector('.login-error');
+          if (existing) existing.remove();
+          form.appendChild(err);
+          return;
+        }
+        window.location.href = user.role === 'teacher' ? 'teacher/dashboard.html' : 'student/dashboard.html';
+      }, 600);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item" href="gradebook.html"><span class="nav-icon">📊</span> Gradebook</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title" id="navbarTitle">Class</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12 navbar-avatar" id="navbarUser"></div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Class Header -->
+            <div id="classHeader" class="mb-24"
+                style="border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)">
+                <div id="classHeroBanner"
+                    style="padding:32px;background:linear-gradient(135deg,#6366f1,#4338ca);position:relative;min-height:140px">
+                    <div style="position:absolute;inset:0;overflow:hidden">
+                        <div
+                            style="position:absolute;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,0.07);top:-60px;right:-40px">
+                        </div>
+                        <div
+                            style="position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.05);bottom:-30px;left:80px">
+                        </div>
+                    </div>
+                    <div style="position:relative;z-index:1">
+                        <h1 id="className" style="font-size:1.8rem;font-weight:800;margin-bottom:6px">Loading...</h1>
+                        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                            <span id="classSubject" style="color:rgba(255,255,255,0.8);font-size:0.9rem"></span>
+                            <span id="classSection" style="color:rgba(255,255,255,0.7);font-size:0.85rem"></span>
+                        </div>
+                        <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
+                            <div class="join-code" id="classJoinCode" style="font-size:0.85rem;padding:6px 14px"></div>
+                            <span style="font-size:0.8rem;color:rgba(255,255,255,0.6)" id="classStudentCount"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs" id="classTabs">
+                <button class="tab-btn" data-tab="tab-stream">📢 Stream</button>
+                <button class="tab-btn" data-tab="tab-classwork">📝 Classwork</button>
+                <button class="tab-btn" data-tab="tab-materials">📚 Materials</button>
+                <button class="tab-btn" data-tab="tab-people">👥 People</button>
+            </div>
+
+            <!-- Stream Tab -->
+            <div class="tab-pane" id="tab-stream">
+                <div class="section-header">
+                    <h2 class="section-title">Class Stream</h2>
+                    <button class="btn btn-primary btn-sm" onclick="openPostAnnouncement()">＋ Post Announcement</button>
+                </div>
+                <div id="streamList"></div>
+            </div>
+
+            <!-- Classwork Tab -->
+            <div class="tab-pane" id="tab-classwork">
+                <div class="section-header">
+                    <h2 class="section-title">Assignments</h2>
+                    <button class="btn btn-primary btn-sm" onclick="openCreateAssignment()">＋ Create Assignment</button>
+                </div>
+                <div id="assignmentList"></div>
+            </div>
+
+            <!-- Materials Tab -->
+            <div class="tab-pane" id="tab-materials">
+                <div class="section-header">
+                    <h2 class="section-title">Study Materials</h2>
+                    <button class="btn btn-primary btn-sm" onclick="openAddMaterial()">＋ Add Material</button>
+                </div>
+                <div id="materialList"></div>
+            </div>
+
+            <!-- People Tab -->
+            <div class="tab-pane" id="tab-people">
+                <div class="section-header">
+                    <h2 class="section-title">Students</h2>
+                    <span class="badge badge-primary" id="studentCountBadge"></span>
+                </div>
+                <div id="studentList"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('teacher');
+        let cls = null;
+        let classId = null;
+
+        if (user) {
+            classId = new URLSearchParams(window.location.search).get('id');
+            cls = LMS.Classes.getById(classId);
+            if (!cls || cls.teacherId !== user.id) { window.location.href = 'dashboard.html'; }
+
+            initNavbar(user);
+            initSidebarUser(user);
+            initSidebar();
+            renderSidebarNotifDrawer(user.id);
+            const allClasses = LMS.Classes.getByTeacher(user.id);
+            initSidebarClasses(allClasses, './');
+
+            // Highlight active sidebar class
+            document.querySelectorAll('.class-nav-item').forEach(el => {
+                if (el.href.includes(classId)) el.classList.add('active');
+            });
+
+            document.getElementById('navbarTitle').textContent = cls.name;
+            document.getElementById('className').textContent = cls.name;
+            document.getElementById('classSubject').textContent = '📚 ' + cls.subject;
+            document.getElementById('classSection').textContent = cls.section ? '· Section ' + cls.section : '';
+            document.getElementById('classJoinCode').textContent = '🔑 ' + cls.joinCode;
+            document.getElementById('classJoinCode').onclick = () => copyText(cls.joinCode);
+            document.getElementById('classHeroBanner').style.background = `linear-gradient(135deg, ${cls.color}, ${cls.color}99)`;
+
+            const students = LMS.Classes.getStudents(classId);
+            document.getElementById('classStudentCount').textContent = `${students.length} students enrolled`;
+            document.getElementById('studentCountBadge').textContent = students.length + ' students';
+
+            initTabs('#classTabs');
+            renderStream();
+            renderClasswork();
+            renderMaterials();
+            renderPeople();
+
+            function renderStream() {
+                const announcements = LMS.Announcements.getByClass(classId);
+                const el = document.getElementById('streamList');
+                if (!announcements.length) {
+                    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📢</div><h3>No announcements yet</h3><p>Post your first announcement to the class stream</p></div>';
+                    return;
+                }
+                el.innerHTML = announcements.map(ann => {
+                    const author = LMS.Helpers.getUser(ann.authorId);
+                    return `<div class="announcement-card">
+        <div class="announcement-header">
+          ${avatarHTML(author?.name || 'T')}
+          <div class="flex-col">
+            <span style="font-size:0.875rem;font-weight:600">${author?.name || 'Teacher'}</span>
+            <span class="announcement-meta">${LMS.Helpers.formatDateTime(ann.timestamp)}</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;color:var(--color-danger)" onclick="deleteAnn('${ann.id}')">🗑</button>
+        </div>
+        <p class="announcement-text">${ann.text}</p>
+        ${ann.attachments?.length ? `<div class="announcement-attach">${ann.attachments.map(f => `<div class="attach-tag">📎 ${f}</div>`).join('')}</div>` : ''}
+        <div class="comment-section">
+          <div id="comments_${ann.id}">${(ann.comments || []).map(c => { const cu = LMS.Helpers.getUser(c.authorId); return `<div class="comment">${avatarHTML(cu?.name || '?')}<div class="comment-body"><div class="comment-author">${cu?.name || 'User'}</div><p>${c.text}</p></div></div>`; }).join('')}</div>
+          <div class="comment-input-row">
+            ${avatarHTML(user.name)}
+            <input type="text" class="form-control" placeholder="Add a comment…" id="commentInput_${ann.id}" onkeypress="if(event.key==='Enter')addComment('${ann.id}')">
+            <button class="btn btn-secondary btn-sm" onclick="addComment('${ann.id}')">Post</button>
+          </div>
+        </div>
+      </div>`;
+                }).join('');
+            }
+
+            window.deleteAnn = (id) => confirmAction('Delete this announcement?', () => { LMS.Announcements.delete(id); renderStream(); Toast.success('Deleted'); });
+            window.addComment = (annId) => {
+                const input = document.getElementById(`commentInput_${annId}`);
+                const text = input?.value.trim();
+                if (!text) return;
+                LMS.Announcements.addComment(annId, { authorId: user.id, text });
+                input.value = '';
+                const cu = user;
+                const commentEl = document.getElementById(`comments_${annId}`);
+                commentEl.insertAdjacentHTML('beforeend', `<div class="comment">${avatarHTML(cu.name)}<div class="comment-body"><div class="comment-author">${cu.name}</div><p>${text}</p></div></div>`);
+                Toast.success('Comment posted');
+            };
+
+            window.openPostAnnouncement = () => {
+                const id = Modal.create('Post Announcement',
+                    `<div class="flex flex-col gap-16">
+        <div class="form-group"><label class="form-label">Announcement *</label><textarea id="ann_text" class="form-control" rows="4" placeholder="Share an update or announcement with the class…"></textarea></div>
+        <div class="form-group"><label class="form-label">Attachments (comma-separated filenames)</label><input id="ann_attach" class="form-control" placeholder="e.g., notes.pdf, slides.pptx"></div>
+      </div>`,
+                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
+       <button class="btn btn-primary" onclick="doPostAnnouncement('${id}')">Post</button>`
+                );
+            };
+            window.doPostAnnouncement = (modalId) => {
+                const text = document.getElementById('ann_text').value.trim();
+                if (!text) { Toast.error('Please enter a message'); return; }
+                const attachRaw = document.getElementById('ann_attach').value.trim();
+                const attachments = attachRaw ? attachRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+                LMS.Announcements.create({ classId, authorId: user.id, text, attachments });
+                Modal.close(modalId);
+                Toast.success('Announcement posted!');
+                renderStream();
+            };
+
+            function renderClasswork() {
+                const assignments = LMS.Assignments.getByClass(classId);
+                const el = document.getElementById('assignmentList');
+                if (!assignments.length) {
+                    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><h3>No assignments</h3><p>Create your first assignment for this class</p></div>';
+                    return;
+                }
+                el.innerHTML = assignments.map(a => {
+                    const subs = LMS.Submissions.getByAssignment(a.id);
+                    const due = LMS.Helpers.dueDateStatus(a.dueDate);
+                    return `<div class="assignment-card" onclick="openAssignmentGrading('${a.id}')">
+        <div class="assignment-icon">📝</div>
+        <div class="assignment-info">
+          <h4>${a.title}</h4>
+          <div class="assignment-meta">
+            <span class="due-date-badge ${due.cls}">📅 ${due.label}</span>
+            <span>Max: ${a.totalMarks} marks</span>
+            <span>${subs.length} submission(s)</span>
+          </div>
+        </div>
+        <div class="flex gap-8">
+          ${subs.filter(s => s.grade === null).length > 0 ? `<span class="badge badge-warning">${subs.filter(s => s.grade === null).length} pending</span>` : '<span class="badge badge-success">All graded</span>'}
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();deleteAssignment('${a.id}')">🗑</button>
+        </div>
+      </div>`;
+                }).join('');
+            }
+
+            window.deleteAssignment = (id) => confirmAction('Delete this assignment?', () => { LMS.Assignments.delete(id); renderClasswork(); Toast.success('Deleted'); });
+
+            window.openAssignmentGrading = (asgnId) => {
+                const asgn = LMS.Assignments.getById(asgnId);
+                const subs = LMS.Submissions.getByAssignment(asgnId);
+                const enrolledStudents = LMS.Classes.getStudents(classId);
+                const body = `
+      <div class="mb-16">
+        <h4 style="font-size:1rem;margin-bottom:6px">${asgn.title}</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted)">${asgn.description}</p>
+        <div class="flex gap-12 mt-8">
+          <span class="badge badge-info">Due: ${LMS.Helpers.formatDate(asgn.dueDate)}</span>
+          <span class="badge badge-primary">Max: ${asgn.totalMarks} marks</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <h4 style="margin-bottom:12px;font-size:0.9rem">Submissions (${subs.length}/${enrolledStudents.length})</h4>
+      ${enrolledStudents.map(st => {
+                    const sub = subs.find(s => s.studentId === st.id);
+                    if (!sub) return `<div class="submission-item"><div class="flex items-center gap-12" style="flex:1">${avatarHTML(st.name)}<div><div style="font-size:0.875rem;font-weight:600">${st.name}</div><div style="font-size:0.78rem;color:var(--text-muted)">No submission yet</div></div></div><span class="badge badge-danger">Missing</span></div>`;
+                    return `<div class="submission-item">
+          <div class="flex items-center gap-12" style="flex:1">${avatarHTML(st.name)}
+            <div>
+              <div style="font-size:0.875rem;font-weight:600">${st.name}</div>
+              <div style="font-size:0.78rem;color:var(--text-muted)">Submitted ${LMS.Helpers.timeAgo(sub.submittedAt)} · ${sub.fileUrl ? sub.fileUrl : 'Text response'}</div>
+              ${sub.content ? `<div style="font-size:0.82rem;color:var(--text-secondary);margin-top:4px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">"${sub.content}"</div>` : ''}
+            </div>
+          </div>
+          <div class="flex items-center gap-8">
+            ${sub.grade !== null ? `<span class="grade-cell ${LMS.Helpers.gradeClass(sub.grade, asgn.totalMarks)}">${sub.grade}/${asgn.totalMarks}</span>` : ''}
+            <button class="btn btn-primary btn-sm" onclick="openGradeForm('${sub.id}','${asgn.totalMarks}','${asgn.title}')"> ${sub.grade !== null ? '✏ Edit' : '⭐ Grade'}</button>
+          </div>
+        </div>`;
+                }).join('')}`;
+                Modal.create(`📝 ${asgn.title} — Submissions`, body);
+            };
+
+            window.openGradeForm = (subId, totalMarks, title) => {
+                const sub = LMS.Submissions.getByAssignment(LMS.Assignments.getById(LMS.Submissions.getByAssignment('').find ? '' : subId)?.id || '').find(s => s.id === subId) || (() => { const all = JSON.parse(localStorage.getItem('lms_submissions') || '[]'); return all.find(s => s.id === subId); })();
+                const id = Modal.create(`Grade: ${title}`,
+                    `<div class="flex flex-col gap-16">
+        <div class="form-group"><label class="form-label">Marks (out of ${totalMarks})</label><input id="grade_marks" type="number" min="0" max="${totalMarks}" class="form-control" value="${sub?.grade || ''}" placeholder="Enter marks"></div>
+        <div class="form-group"><label class="form-label">Feedback</label><textarea id="grade_feedback" class="form-control" rows="3" placeholder="Provide constructive feedback…">${sub?.feedback || ''}</textarea></div>
+      </div>`,
+                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
+       <button class="btn btn-success" onclick="doGrade('${subId}','${totalMarks}','${id}')">Save Grade</button>`
+                );
+            };
+            window.doGrade = (subId, totalMarks, modalId) => {
+                const marks = parseInt(document.getElementById('grade_marks').value);
+                const feedback = document.getElementById('grade_feedback').value.trim();
+                if (isNaN(marks) || marks < 0 || marks > totalMarks) { Toast.error(`Enter a valid mark between 0 and ${totalMarks}`); return; }
+                LMS.Submissions.grade(subId, marks, feedback);
+                Modal.close(modalId);
+                Toast.success('Grade saved and student notified!');
+                renderClasswork();
+            };
+
+            window.openCreateAssignment = () => {
+                const id = Modal.create('Create Assignment',
+                    `<div class="flex flex-col gap-16">
+        <div class="form-group"><label class="form-label">Title *</label><input id="a_title" class="form-control" placeholder="Assignment title"></div>
+        <div class="form-group"><label class="form-label">Description</label><textarea id="a_desc" class="form-control" placeholder="Describe the assignment…"></textarea></div>
+        <div class="flex gap-12">
+          <div class="form-group" style="flex:1"><label class="form-label">Due Date *</label><input id="a_due" type="datetime-local" class="form-control"></div>
+          <div class="form-group" style="flex:1"><label class="form-label">Total Marks *</label><input id="a_marks" type="number" min="1" class="form-control" placeholder="100"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Attachments (comma-separated)</label><input id="a_attach" class="form-control" placeholder="e.g., instructions.pdf"></div>
+      </div>`,
+                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
+       <button class="btn btn-primary" onclick="doCreateAssignment('${id}')">Create</button>`
+                );
+            };
+            window.doCreateAssignment = (modalId) => {
+                const title = document.getElementById('a_title').value.trim();
+                const desc = document.getElementById('a_desc').value.trim();
+                const due = document.getElementById('a_due').value;
+                const marks = parseInt(document.getElementById('a_marks').value);
+                const attachRaw = document.getElementById('a_attach').value.trim();
+                if (!title || !due || isNaN(marks)) { Toast.error('Please fill in required fields'); return; }
+                const attachments = attachRaw ? attachRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+                LMS.Assignments.create({ classId, title, description: desc, dueDate: new Date(due).toISOString(), totalMarks: marks, attachments });
+                Modal.close(modalId);
+                Toast.success('Assignment created and students notified!');
+                renderClasswork();
+            };
+
+            function renderMaterials() {
+                const mats = LMS.Materials.getByClass(classId);
+                const el = document.getElementById('materialList');
+                if (!mats.length) {
+                    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📚</div><h3>No materials yet</h3><p>Add study materials for your students</p></div>';
+                    return;
+                }
+                const icons = { pdf: '📄', video: '🎬', link: '🔗', doc: '📃' };
+                el.innerHTML = mats.map(m => `<div class="material-card">
+      <div class="material-icon ${m.type}">${icons[m.type] || '📁'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.9rem;font-weight:600">${m.title}</div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px">${m.type.toUpperCase()} · ${LMS.Helpers.formatDate(m.uploadedAt)}</div>
+      </div>
+      <div class="flex gap-8">
+        ${m.url && m.url !== '#' ? `<a href="${m.url}" target="_blank" class="btn btn-secondary btn-sm">Open ↗</a>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="deleteMat('${m.id}')">🗑</button>
+      </div>
+    </div>`).join('');
+            }
+
+            window.deleteMat = (id) => confirmAction('Remove material?', () => { LMS.Materials.delete(id); renderMaterials(); Toast.success('Removed'); });
+
+            window.openAddMaterial = () => {
+                const id = Modal.create('Add Study Material',
+                    `<div class="flex flex-col gap-16">
+        <div class="form-group"><label class="form-label">Title *</label><input id="m_title" class="form-control" placeholder="Material title"></div>
+        <div class="flex gap-12">
+          <div class="form-group" style="flex:1"><label class="form-label">Type</label>
+            <select id="m_type" class="form-control"><option value="pdf">PDF</option><option value="video">Video</option><option value="link">Link</option><option value="doc">Document</option></select>
+          </div>
+          <div class="form-group" style="flex:1"><label class="form-label">URL / Filename</label><input id="m_url" class="form-control" placeholder="https://... or filename.pdf"></div>
+        </div>
+      </div>`,
+                    `<button class="btn btn-secondary" onclick="Modal.close('${id}')">Cancel</button>
+       <button class="btn btn-primary" onclick="doAddMat('${id}')">Add Material</button>`
+                );
+            };
+            window.doAddMat = (modalId) => {
+                const title = document.getElementById('m_title').value.trim();
+                const type = document.getElementById('m_type').value;
+                const url = document.getElementById('m_url').value.trim() || '#';
+                if (!title) { Toast.error('Please enter a title'); return; }
+                LMS.Materials.create({ classId, title, type, url });
+                Modal.close(modalId);
+                Toast.success('Material added!');
+                renderMaterials();
+            };
+
+            function renderPeople() {
+                const students = LMS.Classes.getStudents(classId);
+                const el = document.getElementById('studentList');
+                if (!students.length) {
+                    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><h3>No students yet</h3><p>Share the join code: <strong style="color:var(--color-primary)">' + cls.joinCode + '</strong></p></div>';
+                    return;
+                }
+                el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Student</th><th>Email</th><th>Joined</th><th style="text-align:right">Action</th></tr></thead>
+      <tbody>${students.map(st => `<tr>
+        <td><div class="flex items-center gap-12">${avatarHTML(st.name)}<span style="font-weight:600">${st.name}</span></div></td>
+        <td>${st.email}</td>
+        <td>${LMS.Helpers.formatDate(st.joinedAt)}</td>
+        <td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="removeStudent('${st.id}')">Remove</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+            }
+
+            window.removeStudent = (studentId) => confirmAction('Remove this student from the class?', () => {
+                LMS.Classes.removeStudent(classId, studentId);
+                Toast.success('Student removed');
+                renderPeople();
+                const s = LMS.Classes.getStudents(classId);
+                document.getElementById('classStudentCount').textContent = `${s.length} students enrolled`;
+                document.getElementById('studentCountBadge').textContent = s.length + ' students';
+            });
+        }
+    </script>
+</body>
+
+</html>

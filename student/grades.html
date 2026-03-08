@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Grades — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item active" href="grades.html"><span class="nav-icon">⭐</span> My Grades</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title">My Grades</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12" id="navbarUser"></div>
+            </div>
+        </header>
+        <main class="main-content">
+            <div class="page-header">
+                <h1>⭐ My Grades</h1>
+                <p>View your grades and feedback across all classes</p>
+            </div>
+
+            <!-- Overall stats -->
+            <div class="grid grid-4 mb-24" id="gradeStats"></div>
+
+            <!-- Chart -->
+            <div class="card mb-24">
+                <div class="card-header">
+                    <h3 class="card-title">📊 Performance by Class</h3>
+                </div>
+                <canvas id="performanceChart" height="100"></canvas>
+            </div>
+
+            <!-- Per class grade cards -->
+            <div id="classesList"></div>
+        </main>
+    </div>
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('student');
+        if (user) {
+            initNavbar(user); initSidebarUser(user); initSidebar();
+            renderSidebarNotifDrawer(user.id);
+            const classes = LMS.Classes.getByStudent(user.id);
+            initSidebarClasses(classes, './');
+
+            const mySubs = LMS.Submissions.getByStudent(user.id).filter(s => s.grade !== null);
+            const classData = classes.map(cls => {
+                const asgns = LMS.Assignments.getByClass(cls.id);
+                const subs = asgns.map(a => ({ asgn: a, sub: LMS.Submissions.getByStudentAndAssignment(user.id, a.id) }));
+                const graded = subs.filter(x => x.sub && x.sub.grade !== null);
+                const totalEarned = graded.reduce((s, x) => s + x.sub.grade, 0);
+                const totalMax = graded.reduce((s, x) => s + x.asgn.totalMarks, 0);
+                const pct = totalMax > 0 ? Math.round((totalEarned / totalMax) * 100) : null;
+                return { cls, asgns, subs, graded, totalEarned, totalMax, pct };
+            });
+
+            const gradedSubs = mySubs.filter(s => { const a = LMS.Assignments.getById(s.assignmentId); return !!a; });
+            const overallEarned = classData.reduce((s, d) => s + d.totalEarned, 0);
+            const overallMax = classData.reduce((s, d) => s + d.totalMax, 0);
+            const overallPct = overallMax > 0 ? Math.round((overallEarned / overallMax) * 100) : null;
+            const letterGrade = overallPct === null ? 'N/A' : overallPct >= 90 ? 'A+' : overallPct >= 80 ? 'A' : overallPct >= 70 ? 'B' : overallPct >= 60 ? 'C' : overallPct >= 50 ? 'D' : 'F';
+
+            document.getElementById('gradeStats').innerHTML = [
+                { label: 'Overall %', value: overallPct !== null ? overallPct + '%' : 'N/A', icon: '📊', color: '#6366f1' },
+                { label: 'Letter Grade', value: letterGrade, icon: '🎓', color: '#10b981' },
+                { label: 'Assignments Graded', value: gradedSubs.length, icon: '✅', color: '#f59e0b' },
+                { label: 'Total Score', value: `${overallEarned}/${overallMax}`, icon: '⭐', color: '#38bdf8' },
+            ].map(s => `<div class="stat-card" style="--accent-color:${s.color}"><div class="stat-icon" style="background:${s.color}">${s.icon}</div><div class="stat-info"><div class="stat-value">${s.value}</div><div class="stat-label">${s.label}</div></div></div>`).join('');
+
+            // Chart
+            new Chart(document.getElementById('performanceChart'), {
+                type: 'bar',
+                data: {
+                    labels: classData.map(d => d.cls.subject),
+                    datasets: [{
+                        label: 'Average %',
+                        data: classData.map(d => d.pct || 0),
+                        backgroundColor: classData.map(d => d.pct === null ? '#475569' : d.pct >= 75 ? '#10b981' : d.pct >= 50 ? '#f59e0b' : '#f43f5e'),
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+                        y: { min: 0, max: 100, ticks: { color: '#94a3b8', callback: v => v + '%' }, grid: { color: 'rgba(148,163,184,0.08)' } }
+                    }
+                }
+            });
+
+            // Per class
+            const el = document.getElementById('classesList');
+            if (!classData.length) {
+                el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⭐</div><h3>No grades yet</h3><p>Enrolled in classes and wait for teachers to grade your work</p></div>';
+            } else {
+                el.innerHTML = classData.map(d => {
+                    const pctDisplay = d.pct !== null ? d.pct + '%' : 'N/A';
+                    const gradeColor = d.pct === null ? 'var(--text-muted)' : d.pct >= 75 ? 'var(--color-success)' : d.pct >= 50 ? 'var(--color-warning)' : 'var(--color-danger)';
+                    return `<div class="card mb-20">
+        <div class="card-header">
+          <div class="flex items-center gap-12">
+            <div style="width:44px;height:44px;border-radius:12px;background:${d.cls.color};display:flex;align-items:center;justify-content:center;font-size:1.2rem">🏫</div>
+            <div>
+              <div style="font-size:1rem;font-weight:700">${d.cls.name}</div>
+              <div style="font-size:0.8rem;color:var(--text-muted)">${d.cls.subject}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:1.5rem;font-weight:800;color:${gradeColor}">${pctDisplay}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted)">${d.totalEarned}/${d.totalMax} marks</div>
+          </div>
+        </div>
+        ${d.pct !== null ? `<div class="progress-bar mb-20"><div class="progress-bar-fill" style="width:${d.pct}%;background:${gradeColor}"></div></div>` : ''}
+        ${d.subs.length === 0 ? '<div class="empty-state" style="padding:20px"><div class="empty-state-icon">📝</div><h3>No assignments yet</h3></div>' : `
+        <div class="table-wrap"><table>
+          <thead><tr><th>Assignment</th><th>Due</th><th>Score</th><th>%</th><th>Feedback</th></tr></thead>
+          <tbody>${d.subs.map(x => {
+                        const sub = x.sub;
+                        const a = x.asgn;
+                        if (!sub) return `<tr><td style="font-weight:600">${a.title}</td><td>${LMS.Helpers.formatDate(a.dueDate)}</td><td colspan="3"><span class="badge badge-danger">Not submitted</span></td></tr>`;
+                        if (sub.grade === null) return `<tr><td style="font-weight:600">${a.title}</td><td>${LMS.Helpers.formatDate(a.dueDate)}</td><td><span class="badge badge-warning">Pending</span></td><td>—</td><td style="color:var(--text-muted);font-size:0.8rem">Awaiting teacher</td></tr>`;
+                        const pct = Math.round((sub.grade / a.totalMarks) * 100);
+                        return `<tr>
+              <td style="font-weight:600">${a.title}</td>
+              <td style="font-size:0.82rem">${LMS.Helpers.formatDate(a.dueDate)}</td>
+              <td><span class="grade-cell ${LMS.Helpers.gradeClass(sub.grade, a.totalMarks)}">${sub.grade}/${a.totalMarks}</span></td>
+              <td style="font-weight:700;color:${pct >= 75 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-warning)' : 'var(--color-danger)'}">${pct}%</td>
+              <td style="font-size:0.82rem;color:var(--text-secondary);max-width:200px">${sub.feedback || '<span style="color:var(--text-muted)">No feedback</span>'}</td>
+            </tr>`;
+                    }).join('')}</tbody>
+        </table></div>`}
+      </div>`;
+                }).join('');
+            }
+        }
+    </script>
+</body>
+
+</html>

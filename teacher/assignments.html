@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignments — EduFlow</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/dashboard.css">
+</head>
+
+<body>
+    <div class="dashboard-layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">🎓</div><span>Edu<em>Flow</em></span>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="nav-item" href="dashboard.html"><span class="nav-icon">🏠</span> Dashboard</a>
+                <a class="nav-item active" href="assignments.html"><span class="nav-icon">📝</span> Assignments</a>
+                <a class="nav-item" href="gradebook.html"><span class="nav-icon">📊</span> Gradebook</a>
+                <a class="nav-item" href="messages.html"><span class="nav-icon">💬</span> Messages</a>
+            </nav>
+            <div class="sidebar-section">
+                <div class="sidebar-section-label">My Classes</div>
+            </div>
+            <div class="sidebar-classes" id="sidebarClasses"></div>
+            <div class="sidebar-footer">
+                <div class="user-profile" id="sidebarUser"></div>
+                <button class="btn btn-ghost btn-sm w-full mt-8" id="logoutBtn" style="justify-content:center">⬅
+                    Logout</button>
+            </div>
+        </aside>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+        <header class="navbar">
+            <button class="sidebar-toggle btn btn-ghost btn-icon" id="sidebarToggle">☰</button>
+            <div class="navbar-title">All Assignments</div>
+            <div class="navbar-actions">
+                <button class="notif-btn" id="notifBtn">🔔<span class="notif-count" id="notifCount"></span></button>
+                <div class="flex items-center gap-12" id="navbarUser"></div>
+            </div>
+        </header>
+        <main class="main-content">
+            <div class="page-header">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1>📝 Assignment Manager</h1>
+                        <p>Manage all assignments across your classes</p>
+                    </div>
+                    <div class="flex gap-12">
+                        <select class="form-control" id="classFilter" style="width:220px"
+                            onchange="renderAssignments()">
+                            <option value="">All Classes</option>
+                        </select>
+                        <select class="form-control" id="statusFilter" style="width:160px"
+                            onchange="renderAssignments()">
+                            <option value="">All Status</option>
+                            <option value="open">Open</option>
+                            <option value="overdue">Overdue</option>
+                            <option value="graded">Fully Graded</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <div id="assignmentsTable"></div>
+            </div>
+        </main>
+    </div>
+    <script src="../js/data.js"></script>
+    <script src="../js/ui.js"></script>
+    <script>
+        const user = LMS.Auth.requireAuth('teacher');
+        if (user) {
+            initNavbar(user); initSidebarUser(user); initSidebar();
+            renderSidebarNotifDrawer(user.id);
+            const classes = LMS.Classes.getByTeacher(user.id);
+            initSidebarClasses(classes, './');
+            const classFilter = document.getElementById('classFilter');
+            classes.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; classFilter.appendChild(o); });
+
+            function renderAssignments() {
+                const cId = classFilter.value;
+                const status = document.getElementById('statusFilter').value;
+                const filteredClasses = cId ? classes.filter(c => c.id === cId) : classes;
+                let allAsgns = filteredClasses.flatMap(c => LMS.Assignments.getByClass(c.id).map(a => ({ ...a, cls: c })));
+                if (status === 'open') allAsgns = allAsgns.filter(a => new Date(a.dueDate) > Date.now());
+                if (status === 'overdue') allAsgns = allAsgns.filter(a => new Date(a.dueDate) < Date.now());
+                if (status === 'graded') {
+                    allAsgns = allAsgns.filter(a => { const subs = LMS.Submissions.getByAssignment(a.id); const enrolled = LMS.Classes.getStudents(a.classId).length; return subs.length >= enrolled && subs.every(s => s.grade !== null); });
+                }
+                const el = document.getElementById('assignmentsTable');
+                if (!allAsgns.length) { el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📝</div><h3>No assignments found</h3></div>'; return; }
+                el.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Title</th><th>Class</th><th>Due Date</th><th>Marks</th><th>Submissions</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody>${allAsgns.map(a => {
+                    const subs = LMS.Submissions.getByAssignment(a.id);
+                    const enrolled = LMS.Classes.getStudents(a.classId).length;
+                    const due = LMS.Helpers.dueDateStatus(a.dueDate);
+                    const pending = subs.filter(s => s.grade === null).length;
+                    let statusBadge = `<span class="badge badge-success">Graded</span>`;
+                    if (pending > 0) statusBadge = `<span class="badge badge-warning">${pending} pending</span>`;
+                    if (new Date(a.dueDate) < Date.now() && subs.length < enrolled) statusBadge = `<span class="badge badge-danger">Overdue</span>`;
+                    return `<tr>
+          <td><div style="font-weight:600;font-size:0.9rem">${a.title}</div>${a.description ? `<div style="font-size:0.78rem;color:var(--text-muted);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.description}</div>` : ''}</td>
+          <td><div style="font-size:0.82rem">${a.cls.name}</div></td>
+          <td><span class="due-date-badge ${due.cls}">${due.label}</span></td>
+          <td style="font-weight:600">${a.totalMarks}</td>
+          <td>${subs.length} / ${enrolled}</td>
+          <td>${statusBadge}</td>
+          <td style="text-align:right"><div class="flex gap-8" style="justify-content:flex-end">
+            <a href="class.html?id=${a.classId}#tab-classwork" class="btn btn-secondary btn-sm">View</a>
+            <button class="btn btn-danger btn-sm" onclick="delAsgn('${a.id}')">🗑</button>
+          </div></td>
+        </tr>`;
+                }).join('')}</tbody>
+    </table></div>`;
+            }
+
+            window.delAsgn = (id) => confirmAction('Delete this assignment?', () => { LMS.Assignments.delete(id); renderAssignments(); Toast.success('Deleted'); });
+            renderAssignments();
+        }
+    </script>
+</body>
+
+</html>
